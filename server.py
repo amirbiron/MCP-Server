@@ -85,21 +85,15 @@ def github_headers() -> dict:
 #  MCP Server
 # ══════════════════════════════════════════════════════════════
 
-# הגדרת אבטחת תעבורה - מאפשר גישה מ-Render.com ומקורות מאושרים
-# ALLOWED_HOST ניתן להגדרה כמשתנה סביבה לדומיין ספציפי
-ALLOWED_HOST = os.environ.get("ALLOWED_HOST", "*.onrender.com")
-
+# הגדרת אבטחת תעבורה
+# בסביבת ענן (Render, Heroku וכו') האבטחה מנוהלת ברמת התשתית
+# לכן משביתים את הגנת DNS Rebinding שגורמת לשגיאות 421
 mcp = FastMCP(
     name="CodeBot MCP Server",
     stateless_http=True,
     json_response=True,
     transport_security=TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=[
-            "localhost:*",
-            "127.0.0.1:*",
-            ALLOWED_HOST,
-        ],
+        enable_dns_rebinding_protection=False,
     ),
 )
 
