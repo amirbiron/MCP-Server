@@ -941,9 +941,10 @@ async def health_check(request):
 # ── Entrypoint ──────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import uvicorn
     logger.info(f"מפעיל CodeBot MCP Server v2 על פורט {PORT}")
-    mcp.run(
-        transport="streamable-http",
+    uvicorn.run(
+        mcp.streamable_http_app(),
         host="0.0.0.0",
         port=PORT,
     )
