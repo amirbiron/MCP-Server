@@ -14,6 +14,7 @@ from typing import Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pymongo import MongoClient
 from bson import ObjectId
 
@@ -84,10 +85,22 @@ def github_headers() -> dict:
 #  MCP Server
 # ══════════════════════════════════════════════════════════════
 
+# הגדרת אבטחת תעבורה - מאפשר גישה מ-Render.com ומקורות מאושרים
+# ALLOWED_HOST ניתן להגדרה כמשתנה סביבה לדומיין ספציפי
+ALLOWED_HOST = os.environ.get("ALLOWED_HOST", "*.onrender.com")
+
 mcp = FastMCP(
     name="CodeBot MCP Server",
     stateless_http=True,
     json_response=True,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "localhost:*",
+            "127.0.0.1:*",
+            ALLOWED_HOST,
+        ],
+    ),
 )
 
 
