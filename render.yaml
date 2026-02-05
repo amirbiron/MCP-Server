@@ -1,0 +1,29 @@
+# render.yaml - Render Blueprint
+services:
+  - type: web
+    name: codebot-mcp-server
+    runtime: docker
+    repo: https://github.com/YOUR_USERNAME/codebot-mcp-server
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      # MongoDB
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        value: codebot
+      - key: COLLECTION_NAME
+        value: snippets
+      # Render API (ליצירת token: Account Settings > API Keys)
+      - key: RENDER_API_KEY
+        sync: false
+      - key: RENDER_SERVICE_ID
+        sync: false
+      # GitHub (ליצירת token: Settings > Developer settings > Personal access tokens)
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_REPO
+        sync: false
+      # Server
+      - key: PORT
+        value: "8000"
