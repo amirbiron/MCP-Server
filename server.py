@@ -27,6 +27,7 @@ PORT = int(os.environ.get("PORT", 8000))
 # Render API
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY", "")
 RENDER_SERVICE_ID = os.environ.get("RENDER_SERVICE_ID", "")
+RENDER_OWNER_ID = os.environ.get("RENDER_OWNER_ID", "")
 RENDER_API_BASE = "https://api.render.com/v1"
 
 # GitHub API
@@ -71,6 +72,25 @@ def render_headers() -> dict:
         "Accept": "application/json",
         "Content-Type": "application/json",
     }
+
+
+async def _resolve_render_owner() -> Optional[str]:
+    """שליפת מזהה הבעלים מ-Render API אם לא הוגדר כמשתנה סביבה."""
+    if RENDER_OWNER_ID:
+        return RENDER_OWNER_ID
+    if not RENDER_API_KEY:
+        return None
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(
+            f"{RENDER_API_BASE}/owners",
+            headers=render_headers(),
+        )
+        if resp.status_code == 200:
+            owners = resp.json()
+            if owners and isinstance(owners, list) and len(owners) > 0:
+                owner = owners[0].get("owner", {})
+                return owner.get("id")
+    return None
 
 
 def github_headers() -> dict:
@@ -461,8 +481,13 @@ async def render_get_logs(
     if not sid or not RENDER_API_KEY:
         return {"error": "חסר RENDER_API_KEY או RENDER_SERVICE_ID"}
 
+    owner_id = await _resolve_render_owner()
+    if not owner_id:
+        return {"error": "חסר RENDER_OWNER_ID - יש להגדיר כמשתנה סביבה או לוודא שה-API Key תקין"}
+
     params = {
         "resource": [sid],
+        "owner": owner_id,
         "direction": direction,
         "limit": limit,
     }
