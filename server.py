@@ -463,19 +463,23 @@ async def render_get_logs(
     limit: int = 100,
     instance: Optional[str] = None,
     host: Optional[str] = None,
+    text: Optional[str] = None,
+    level: Optional[str] = None,
 ) -> dict:
     """
     ייבוא לוגים משירות ב-Render לפי טווח זמן.
-    תומך בסינון לפי זמן התחלה וסיום, כיוון, מופע (instance) ו-host.
+    תומך בסינון לפי זמן התחלה וסיום, כיוון, מופע (instance), host, טקסט ורמת חומרה.
 
     Args:
         service_id: מזהה השירות (אם לא צוין, ישתמש בברירת מחדל)
-        start_time: זמן התחלה בפורמט ISO 8601 (לדוגמה: 2025-01-01T00:00:00Z)
-        end_time: זמן סיום בפורמט ISO 8601 (לדוגמה: 2025-01-02T00:00:00Z)
+        start_time: זמן התחלה בפורמט RFC3339 (לדוגמה: 2025-01-01T00:00:00Z)
+        end_time: זמן סיום בפורמט RFC3339 (לדוגמה: 2025-01-02T00:00:00Z)
         direction: כיוון הלוגים - backward (מהסוף להתחלה) או forward (ברירת מחדל: backward)
-        limit: מספר שורות לוג מקסימלי (ברירת מחדל: 100)
+        limit: מספר שורות לוג מקסימלי (1-100, ברירת מחדל: 100)
         instance: סינון לפי מופע ספציפי (אופציונלי)
         host: סינון לפי host ספציפי (אופציונלי)
+        text: סינון לפי טקסט בלוגים (אופציונלי, תומך ב-wildcards ו-regex)
+        level: סינון לפי רמת חומרה (אופציונלי)
     """
     sid = service_id or RENDER_SERVICE_ID
     if not sid or not RENDER_API_KEY:
@@ -485,9 +489,12 @@ async def render_get_logs(
     if not owner_id:
         return {"error": "חסר RENDER_OWNER_ID - יש להגדיר כמשתנה סביבה או לוודא שה-API Key תקין"}
 
+    # הגבלת limit ל-100 (מקסימום ב-Render API)
+    limit = max(1, min(limit, 100))
+
     params = {
-        "resource": [sid],
-        "owner": owner_id,
+        "resource": sid,
+        "ownerId": owner_id,
         "direction": direction,
         "limit": limit,
     }
@@ -499,6 +506,10 @@ async def render_get_logs(
         params["instance"] = instance
     if host:
         params["host"] = host
+    if text:
+        params["text"] = text
+    if level:
+        params["level"] = level
 
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(
@@ -510,14 +521,17 @@ async def render_get_logs(
             return {"error": f"Render Logs API שגיאה: {resp.status_code}", "detail": resp.text}
         data = resp.json()
 
+    # פירוק הלוגים - כל לוג מכיל labels כמערך של {name, value}
     logs = []
     for entry in data.get("logs", []):
+        labels = {lbl["name"]: lbl["value"] for lbl in entry.get("labels", [])}
         logs.append({
             "timestamp": entry.get("timestamp"),
-            "level": entry.get("level", ""),
             "message": entry.get("message", ""),
-            "instance": entry.get("instance", ""),
-            "host": entry.get("host", ""),
+            "level": labels.get("level", ""),
+            "type": labels.get("type", ""),
+            "instance": labels.get("instance", ""),
+            "host": labels.get("host", ""),
         })
 
     result = {
