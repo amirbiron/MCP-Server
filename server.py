@@ -435,6 +435,89 @@ async def render_restart_service(service_id: Optional[str] = None) -> dict:
 
 
 @mcp.tool()
+async def render_get_logs(
+    service_id: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    direction: str = "backward",
+    limit: int = 100,
+    instance: Optional[str] = None,
+    host: Optional[str] = None,
+) -> dict:
+    """
+    ייבוא לוגים משירות ב-Render לפי טווח זמן.
+    תומך בסינון לפי זמן התחלה וסיום, כיוון, מופע (instance) ו-host.
+
+    Args:
+        service_id: מזהה השירות (אם לא צוין, ישתמש בברירת מחדל)
+        start_time: זמן התחלה בפורמט ISO 8601 (לדוגמה: 2025-01-01T00:00:00Z)
+        end_time: זמן סיום בפורמט ISO 8601 (לדוגמה: 2025-01-02T00:00:00Z)
+        direction: כיוון הלוגים - backward (מהסוף להתחלה) או forward (ברירת מחדל: backward)
+        limit: מספר שורות לוג מקסימלי (ברירת מחדל: 100)
+        instance: סינון לפי מופע ספציפי (אופציונלי)
+        host: סינון לפי host ספציפי (אופציונלי)
+    """
+    sid = service_id or RENDER_SERVICE_ID
+    if not sid or not RENDER_API_KEY:
+        return {"error": "חסר RENDER_API_KEY או RENDER_SERVICE_ID"}
+
+    params = {
+        "resource": [sid],
+        "direction": direction,
+        "limit": limit,
+    }
+    if start_time:
+        params["startTime"] = start_time
+    if end_time:
+        params["endTime"] = end_time
+    if instance:
+        params["instance"] = instance
+    if host:
+        params["host"] = host
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(
+            f"{RENDER_API_BASE}/logs",
+            headers=render_headers(),
+            params=params,
+        )
+        if resp.status_code != 200:
+            return {"error": f"Render Logs API שגיאה: {resp.status_code}", "detail": resp.text}
+        data = resp.json()
+
+    logs = []
+    for entry in data.get("logs", []):
+        logs.append({
+            "timestamp": entry.get("timestamp"),
+            "level": entry.get("level", ""),
+            "message": entry.get("message", ""),
+            "instance": entry.get("instance", ""),
+            "host": entry.get("host", ""),
+        })
+
+    result = {
+        "service_id": sid,
+        "count": len(logs),
+        "direction": direction,
+        "logs": logs,
+    }
+
+    # מידע על pagination - אם יש עוד לוגים לטעון
+    if data.get("hasMore"):
+        result["has_more"] = True
+        result["next_start_time"] = data.get("nextStartTime")
+        result["next_end_time"] = data.get("nextEndTime")
+
+    if start_time or end_time:
+        result["time_range"] = {
+            "start": start_time or "לא צוין (תחילת הלוגים)",
+            "end": end_time or "לא צוין (סוף הלוגים)",
+        }
+
+    return result
+
+
+@mcp.tool()
 async def render_get_env_vars(service_id: Optional[str] = None) -> dict:
     """
     הצגת משתני הסביבה של שירות ב-Render.
@@ -904,6 +987,7 @@ def tools_guide_resource() -> str:
 - `render_list_deploys` - דפלויים אחרונים
 - `render_trigger_deploy` - הפעלת דפלוי
 - `render_restart_service` - ריסטארט
+- `render_get_logs` - ייבוא לוגים לפי טווח זמן
 - `render_get_env_vars` - משתני סביבה
 
 ## GitHub
